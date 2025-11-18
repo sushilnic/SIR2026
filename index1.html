@@ -1,0 +1,383 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <title>टोंक जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+      background-color: #ffffff;
+      color: #000000;
+    }
+
+    h2 {
+      background-color: #ffffff;
+      color: #0077cc;
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+      border: 1px solid #ccc;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    #status {
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    #status.loading { color: #cc0000; }
+    #status.loaded  { color: #006400; }
+
+    #pagination {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    #pagination button {
+      padding: 6px 12px;
+      margin: 0 5px;
+      font-size: 14px;
+    }
+    
+    #spinner {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    #resetBtn {
+      display: block;
+      margin: 10px auto;
+      padding: 8px 16px;
+      font-size: 15px;
+      background-color: #0077cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #resetBtn:hover {
+      background-color: #005fa3;
+    }
+
+    footer {
+      text-align: center;
+      padding: 12px;
+      margin-top: 20px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #003366;
+      border-top: 1px solid #ccc;
+      background-color: #f1f1f1;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🔍 टोंक जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</h2>
+<p id="status">डेटा लोड हो रहा है...</p>
+
+<div id="spinner" style="display: none;">
+  <svg width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="18" stroke="#0077cc" stroke-width="4" fill="none" stroke-linecap="round"
+      stroke-dasharray="90" stroke-dashoffset="0">
+      <animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20"
+        dur="1s" repeatCount="indefinite" />
+    </circle>
+  </svg>
+</div>
+
+<label for="acSelect" style="font-weight: bold;">🗳️ कृपया अपना वर्तमान विधानसभा क्षेत्र चुनें:</label>
+<select id="acSelect">
+  <option value="all">सभी विधानसभा क्षेत्र</option>
+  <option value="89-NIWAI">89-NIWAI</option>
+  <option value="90-TONK">90-TONK</option>
+  <option value="91-UNIARA">91-UNIARA</option>
+  <option value="92-TODARAISINGH">92-TODARAISINGH</option>
+  <option value="93-MALPURA">93-MALPURA</option>
+</select>
+
+<input type="text" id="oldAcInput" placeholder="Old AC No.">
+<input type="text" id="partNoInput" placeholder="Part No.">
+
+<!-- Separate search boxes -->
+<input type="text" id="nameInput" placeholder="नाम...">
+<input type="text" id="relativeInput" placeholder="संबंधी का नाम...">
+<input type="text" id="epicInput" placeholder="EPIC...">
+
+<!-- Reset button -->
+<button id="resetBtn">फ़िल्टर रीसेट</button>
+
+<table id="resultsTable">
+  <thead>
+    <tr>
+      <th>Old AC No.</th>
+      <th>Part No.</th>
+      <th>S. NO.</th>
+      <th>H. NO.</th>
+      <th>Name</th>
+      <th>Relative Name</th>
+      <th>Age</th>
+      <th>EPIC</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div id="pagination"></div>
+
+<footer>
+  Developed By : सुशील अग्रवाल , नोडल अधिकारी, जिला निर्वाचन कार्यालय, टोंक (राज.)
+</footer>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const acSelect  = document.getElementById('acSelect');
+  const oldAcInput = document.getElementById('oldAcInput');
+  const partNoInput = document.getElementById('partNoInput');
+  const nameInput = document.getElementById('nameInput');
+  const relativeInput = document.getElementById('relativeInput');
+  const epicInput = document.getElementById('epicInput');
+  const tableBody  = document.querySelector('#resultsTable tbody');
+  const pagination = document.getElementById('pagination');
+  const spinner = document.getElementById('spinner');
+  const resetBtn = document.getElementById('resetBtn');
+
+  const acChunkMap = {
+    "89-NIWAI": 2,
+    // "118-पाली": 9,
+    // "119-मारवाड़ जंक्शन": 10,
+    // "120-बाली": 12,
+    // "121-सुमेरपुर": 11
+  };
+
+  let allData = [];
+  let data = [];
+  let filtered = [];
+  let currentPage = 1;
+  const resultsPerPage = 20;
+
+  function normalize(value) {
+    return value ? String(value).replace(/\s+/g, ' ').trim().toLowerCase() : '';
+  }
+
+  function showSpinner() { spinner.style.display = 'block'; }
+  function hideSpinner() { spinner.style.display = 'none'; }
+
+  async function fetchChunks(acName, count) {
+    const promises = [];
+    for (let i = 1; i <= count; i++) {
+      const path = `data/${acName}/data${i}.json`;
+      alert(path);
+      promises.push(fetch(path).then(r => r.ok ? r.json() : []).catch(() => []));
+    }
+    const results = await Promise.allSettled(promises);
+    return results.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+  }
+
+  async function loadAllData() {
+    showSpinner();
+    statusEl.textContent = 'डेटा लोड हो रहा है...';
+    statusEl.classList.add('loading');
+
+    const allPromises = Object.entries(acChunkMap).map(([ac, count]) => fetchChunks(ac, count));
+    const allResults = await Promise.all(allPromises);
+
+    allData = allResults.flat();
+    data = allData;
+    filtered = data;
+
+    filterData();
+    renderPage();
+
+    statusEl.textContent = `✅ कुल ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+    hideSpinner();
+  }
+
+  async function loadSelectedAC(acName) {
+    showSpinner();
+    statusEl.textContent = `${acName} से डेटा लोड हो रहा है...`;
+    statusEl.classList.add('loading');
+
+    const count = acChunkMap[acName];
+    data = await fetchChunks(acName, count);
+    filtered = data;
+    currentPage = 1;
+
+    filterData();
+    renderPage();
+
+    statusEl.textContent = `✅ ${acName} से ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+    hideSpinner();
+  }
+
+  acSelect.addEventListener('change', () => {
+    const selected = acSelect.value;
+    if (selected === 'all') {
+      data = allData;
+      filtered = data;
+      currentPage = 1;
+      filterData();
+      renderPage();
+      statusEl.textContent = `✅ सभी क्षेत्रों से ${data.length} रिकॉर्ड लोड हुए`;
+      statusEl.classList.remove('loading');
+      statusEl.classList.add('loaded');
+    } else {
+      loadSelectedAC(selected);
+    }
+  });
+
+  function filterData() {
+    const oldAcQuery    = normalize(oldAcInput.value);
+    const partNoQuery   = normalize(partNoInput.value);
+    const nameQuery     = normalize(nameInput.value);
+    const relativeQuery = normalize(relativeInput.value);
+    const epicQuery     = normalize(epicInput.value);
+
+    filtered = data.filter(row => {
+      const rowOldAc    = normalize(row['Old AC No.']);
+      const rowPartNo   = normalize(row['Part No.']);
+      const rowName     = normalize(row['Name']);
+      const rowRelative = normalize(row['Relative Name']);
+      const rowEpic     = normalize(row['EPIC']);
+
+      const matchOldAc  = oldAcQuery === ''  || rowOldAc === oldAcQuery;
+      const matchPartNo = partNoQuery === '' || rowPartNo === partNoQuery;
+
+      const matchName     = nameQuery === ''     || rowName.includes(nameQuery);
+      const matchRelative = relativeQuery === '' || rowRelative.includes(relativeQuery);
+      const matchEpic     = epicQuery === ''     || rowEpic.includes(epicQuery);
+
+      return matchOldAc && matchPartNo && matchName && matchRelative && matchEpic;
+    });
+  }
+
+  function renderPage() {
+    tableBody.innerHTML = '';
+    const start = (currentPage - 1) * resultsPerPage;
+    const end   = start + resultsPerPage;
+    const pageData = filtered.slice(start, end);
+
+    if (pageData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="8">कोई परिणाम नहीं मिला</td></tr>';
+      pagination.innerHTML = '';
+      return;
+    }
+
+    pageData.forEach(row => {
+      const tr = document.createElement('tr');
+      ['Old AC No.', 'Part No.', 'S. NO.', 'H. NO.', 'Name', 'Relative Name', 'Age', 'EPIC'].forEach(key => {
+        const td = document.createElement('td');
+        td.textContent = row[key] ?? '';
+        tr.appendChild(td);
+      });
+      tableBody.appendChild(tr);
+    });
+
+    updatePaginationControls();
+  }
+
+  function updatePaginationControls() {
+    pagination.innerHTML = '';
+    const totalPages = Math.ceil(filtered.length / resultsPerPage);
+    if (totalPages <= 1) return;
+
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '⬅️ पिछला';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => { currentPage--; renderPage(); };
+
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '➡️ अगला';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => { currentPage++; renderPage(); };
+
+    pagination.appendChild(prevBtn);
+    pagination.appendChild(document.createTextNode(` पेज ${currentPage} / ${totalPages} `));
+    pagination.appendChild(nextBtn);
+  }
+
+  function triggerSearch() {
+    currentPage = 1;
+    filterData();
+    renderPage();
+  }
+
+  function debounce(fn, delay = 300) {
+    let t;
+    return function(...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  const debouncedTrigger = debounce(triggerSearch, 300);
+
+  nameInput.addEventListener('input', debouncedTrigger);
+  relativeInput.addEventListener('input', debouncedTrigger);
+  epicInput.addEventListener('input', debouncedTrigger);
+
+  oldAcInput.addEventListener('input', triggerSearch);
+  partNoInput.addEventListener('input', triggerSearch);
+
+  resetBtn.addEventListener('click', () => {
+    acSelect.value = 'all';
+    oldAcInput.value = '';
+    partNoInput.value = '';
+    nameInput.value = '';
+    relativeInput.value = '';
+    epicInput.value = '';
+
+    data = allData;
+    filtered = data;
+    currentPage = 1;
+
+    filterData();
+    renderPage();
+
+    statusEl.textContent = `✅ सभी क्षेत्रों से ${data.length} रिकॉर्ड लोड हुए`;
+    statusEl.classList.remove('loading');
+    statusEl.classList.add('loaded');
+  });
+
+  // Initial load
+  loadAllData();
+</script>
+
+</body>
+</html>

@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="hi">
 <head>
   <meta charset="UTF-8">
-  <title>टोंक जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</title>
+  <title>पाली जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</title>
   <style>
     body {
       font-family: sans-serif;
@@ -101,11 +100,19 @@
       border-top: 1px solid #ccc;
       background-color: #f1f1f1;
     }
+
+    /* Highlight style */
+    mark {
+      background-color: yellow;
+      color: black;
+      font-weight: bold;
+      padding: 0 1px;
+    }
   </style>
 </head>
 <body>
 
-<h2>🔍 टोंक जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</h2>
+<h2>🔍 पाली जिले की 2002 की मतदाता सूचियों से मतदाताओं की खोज</h2>
 <p id="status">डेटा लोड हो रहा है...</p>
 
 <div id="spinner" style="display: none;">
@@ -121,11 +128,11 @@
 <label for="acSelect" style="font-weight: bold;">🗳️ कृपया अपना वर्तमान विधानसभा क्षेत्र चुनें:</label>
 <select id="acSelect">
   <option value="all">सभी विधानसभा क्षेत्र</option>
-  <option value="89-NIWAI">89-NIWAI</option>
-  <option value="90-TONK">90-TONK</option>
-  <option value="91-UNIARA">91-UNIARA</option>
-  <option value="92-TODARAISINGH">92-TODARAISINGH</option>
-  <option value="93-MALPURA">93-MALPURA</option>
+  <option value="117-सोजत">117-सोजत</option>
+  <option value="118-पाली">118-पाली</option>
+  <option value="119-मारवाड़ जंक्शन">119-मारवाड़ जंक्शन</option>
+  <option value="120-बाली">120-बाली</option>
+  <option value="121-सुमेरपुर">121-सुमेरपुर</option>
 </select>
 
 <input type="text" id="oldAcInput" placeholder="Old AC No.">
@@ -158,7 +165,7 @@
 <div id="pagination"></div>
 
 <footer>
-  Developed By : सुशील अग्रवाल , नोडल अधिकारी, जिला निर्वाचन कार्यालय, टोंक (राज.)
+  Developed By : सुरेन्द्र जैन, अति. नोडल अधिकारी, जिला निर्वाचन कार्यालय, पाली (राज.)
 </footer>
 
 <script>
@@ -286,6 +293,16 @@
     });
   }
 
+  /* Highlight helper: wraps matched substring in <mark> */
+  function highlightMatch(text, query) {
+    if (!text) return '';
+    if (!query) return text;
+    // Escape regex special characters in query
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    return String(text).replace(regex, '<mark>$1</mark>');
+  }
+
   function renderPage() {
     tableBody.innerHTML = '';
     const start = (currentPage - 1) * resultsPerPage;
@@ -298,11 +315,29 @@
       return;
     }
 
+    // Current queries (already lowercased and trimmed in normalize used for filter)
+    const queries = {
+      'Old AC No.': normalize(oldAcInput.value),
+      'Part No.': normalize(partNoInput.value),
+      'Name': normalize(nameInput.value),
+      'Relative Name': normalize(relativeInput.value),
+      'EPIC': normalize(epicInput.value)
+    };
+
     pageData.forEach(row => {
       const tr = document.createElement('tr');
       ['Old AC No.', 'Part No.', 'S. NO.', 'H. NO.', 'Name', 'Relative Name', 'Age', 'EPIC'].forEach(key => {
         const td = document.createElement('td');
-        td.textContent = row[key] ?? '';
+        const raw = row[key] ?? '';
+
+        // Apply highlighting only to searchable columns
+        if (key in queries && queries[key]) {
+          // We need a case-insensitive highlight while preserving original casing in display.
+          // highlightMatch uses a case-insensitive regex and keeps original text via $1.
+          td.innerHTML = highlightMatch(String(raw), queries[key]);
+        } else {
+          td.textContent = raw;
+        }
         tr.appendChild(td);
       });
       tableBody.appendChild(tr);
